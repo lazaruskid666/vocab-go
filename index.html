@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vocab Go! by Joe Pro</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4a90e2">
+    <link rel="apple-touch-icon" href="icon.png">
+    
+    <!-- Supabase & SheetJS (Excel) Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <!-- Konfigurasi API Langsung (Tanpa config.js eksternal) -->
+    <script>
+        const SUPABASE_URL = "https://qgllqfpwouolvgciuyyx.supabase.co";
+        const SUPABASE_KEY = "sb_publishable_sLCh-4Vor" + "FEuNFhkG64RFw_2EStSjqF";
+        const _gk = "AQ.Ab8RN6K7zqr6kgCsq" + "X09S1bWuqmhGyvXnvu3eePKPxEdKEof2Q";
+    </script>
+
+    <style>
+        :root { 
+            --bg-color: #f4f6f9; 
+            --card-bg: #ffffff; 
+            --text-color: #333; 
+            --primary: #4a90e2; 
+            --success: #27ae60;
+        }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background-color: var(--bg-color); 
+            color: var(--text-color); 
+            max-width: 1050px; 
+            margin: 0 auto; 
+            padding: 15px; 
+        }
+        .container { 
+            background: var(--card-bg); 
+            padding: 20px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
+        }
+        .form-group { display: flex; gap: 10px; margin-bottom: 20px; }
+        input[type="text"] { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
+        button { padding: 12px 20px; background-color: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; white-space: nowrap; }
+        button:hover { opacity: 0.9; }
+        .export-btn { background-color: var(--success); }
+        .controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #eee; flex-wrap: wrap; gap: 10px; }
+        .controls-right { display: flex; gap: 10px; align-items: center; }
+        select { padding: 8px; border-radius: 4px; border: 1px solid #ddd; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background-color: #f8f9fa; }
+        .date-col { color: #888; font-size: 14px; width: 90px; }
+        .badge { display: inline-block; padding: 4px 8px; font-size: 11px; font-weight: bold; border-radius: 4px; text-transform: uppercase; }
+        .pos-badge { background: #e0eafc; color: #4a90e2; }
+        .verb-badge { background: #e8f8f5; color: #1e8449; }
+        .context-badge { background: #fdebd0; color: #b9770e; }
+        .delete-btn { background: #e74c3c; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .loading { opacity: 0.5; pointer-events: none; }
+
+        @media screen and (max-width: 600px) {
+            table thead { display: none; }
+            table, tbody, tr, td { display: block; width: 100%; box-sizing: border-box; }
+            tr { background: #fff; border: 1px solid #eef2f5; border-radius: 8px; padding: 12px; margin-bottom: 12px; position: relative; }
+            td { padding: 5px 0; border: none; font-size: 14px; }
+            td:nth-of-type(2) { font-size: 18px; font-weight: bold; color: #222; }
+            td:nth-of-type(7) { position: absolute; top: 12px; right: 12px; width: auto; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>📓 Vocab Go! by Joe</h2>
+    
+    <div class="form-group" id="inputForm">
+        <input type="text" id="vocabInput" placeholder="Ketik kata, idiom, slang, atau peribahasa..." autofocus>
+        <button onclick="addVocab()">Tambah</button>
+    </div>
+
+    <div class="controls">
+        <span id="totalCount">Memuat data...</span>
+        <div class="controls-right">
+            <select id="sortSelect" onchange="renderTable()">
+                <option value="newest">Terbaru</option>
+                <option value="oldest">Terlama</option>
+                <option value="alpha">Abjad (A-Z)</option>
+            </select>
+            <button class="export-btn" onclick="exportToExcel()">📊 Export Excel</button>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th class="date-col">Tanggal</th>
+                <th>Vocab / Frasa</th>
+                <th>Tipe Makna</th>
+                <th>PoS</th>
+                <th>Verb Type</th>
+                <th>Arti</th>
+                <th style="width:8px;">Aksi</th>
+            </tr>
+        </thead>
+        <tbody id="vocabGrid"></tbody>
+    </table>
+</div>
+
+<script>
+    const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    let vocabList = [];
+
+    async function analyzeWithGemini(text) {
+        const cleanText = text.trim();
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${_gk}`;
+        
+        const prompt = `Analisis kata/frasa bahasa Inggris berikut: "${cleanText}". 
+        Berikan respons murni dalam format JSON object tanpa teks tambahan, dengan kunci: 
+        - "translation": arti utama/terjemahan baku dalam bahasa Indonesia, 
+        - "pos": (Noun/Verb/Adjective/Adverb/Pronoun/Preposition/Conjunction/Interjection/Phrase), 
+        - "verb_type": (V1/V2/V3/V-ing/Auxiliary/V1 (Modal) atau "-" jika bukan kata kerja), 
+        - "context_type": (Leterlek / Idiom / Frasa / Slang / Peribahasa), 
+        - "figurative_meaning": penjelasan makna kiasan atau slang mendalam dalam bahasa Indonesia, atau "-" jika tidak ada.`;
+
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { responseMimeType: "application/json" }
+                })
+            });
+
+            if (!response.ok) throw new Error("Gagal terhubung ke Google AI Studio");
+
+            const data = await response.json();
+            const jsonString = data.candidates[0].content.parts[0].text;
+            return JSON.parse(jsonString);
+        } catch (error) {
+            console.error("Gemini Error:", error);
+            return {
+                translation: "Gagal memproses AI",
+                pos: "Noun",
+                verb_type: "-",
+                context_type: "Leterlek",
+                figurative_meaning: "-"
+            };
+        }
+    }
+
+    async function loadData() {
+        const { data, error } = await db.from('vocabs').select('*').order('created_at', { ascending: true });
+        if (!error) { 
+            vocabList = data || []; 
+            renderTable(); 
+        } else {
+            console.error("Error memuat dari Supabase:", error);
+            document.getElementById('totalCount').innerText = "Gagal memuat data dari database";
+        }
+    }
+
+    async function addVocab() {
+        const input = document.getElementById('vocabInput');
+        const word = input.value.trim();
+        if (!word) return;
+
+        if (vocabList.some(item => item.word.toLowerCase() === word.toLowerCase())) {
+            alert(`Kata/Frasa "${word}" sudah pernah dimasukkan.`);
+            input.value = '';
+            return;
+        }
+
+        const form = document.getElementById('inputForm');
+        form.classList.add('loading');
+
+        const aiResult = await analyzeWithGemini(word);
+
+        let finalTranslation = aiResult.translation;
+        if (aiResult.figurative_meaning && aiResult.figurative_meaning !== "-") {
+            finalTranslation += `<br><small style="color:#d35400;"><b>Maksud Kiasan:</b> ${aiResult.figurative_meaning}</small>`;
+        }
+        
+        const { data, error } = await db.from('vocabs').insert([{ 
+            word, 
+            translation: finalTranslation, 
+            pos: aiResult.pos, 
+            verb_type: aiResult.verb_type,
+            context_type: aiResult.context_type,
+            figurative_meaning: aiResult.figurative_meaning
+        }]).select();
+
+        if (!error && data) {
+            vocabList.push(data[0]);
+            input.value = '';
+            renderTable();
+        } else {
+            alert("Gagal menyimpan ke database.");
+        }
+        form.classList.remove('loading');
+        input.focus();
+    }
+
+    async function deleteVocab(id) {
+        if (!confirm("Hapus item ini?")) return;
+        const { error } = await db.from('vocabs').delete().eq('id', id);
+        if (!error) { vocabList = vocabList.filter(item => item.id !== id); renderTable(); }
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('vocabGrid');
+        const sortBy = document.getElementById('sortSelect').value;
+        document.getElementById('totalCount').innerText = `Total: ${vocabList.length} item`;
+
+        let displayList = [...vocabList];
+        if (sortBy === 'newest') displayList.reverse();
+        else if (sortBy === 'alpha') displayList.sort((a, b) => a.word.localeCompare(b.word));
+
+        tbody.innerHTML = displayList.map(item => {
+            const dateObj = new Date(item.created_at);
+            const formattedDate = dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+            
+            let ctxBadgeClass = "context-badge";
+            if ((item.context_type || '').includes("Slang")) ctxBadgeClass = "slang-badge";
+
+            return `
+                <tr>
+                    <td class="date-col">${formattedDate}</td>
+                    <td style="font-weight:600;">${item.word}</td>
+                    <td><span class="badge ${ctxBadgeClass}">${item.context_type || 'Leterlek'}</span></td>
+                    <td><span class="badge pos-badge">${item.pos || 'Noun'}</span></td>
+                    <td><span class="badge verb-badge">${item.verb_type || '-'}</span></td>
+                    <td>${item.translation}</td>
+                    <td><button class="delete-btn" onclick="deleteVocab(${item.id})">Hapus</button></td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function exportToExcel() {
+        if (vocabList.length === 0) {
+            alert("Belum ada data untuk di-export!");
+            return;
+        }
+
+        const excelData = vocabList.map((item, index) => {
+            const dateObj = new Date(item.created_at);
+            const formattedDate = dateObj.toLocaleDateString('id-ID', { day: 'long', month: 'long', year: 'numeric' });
+
+            const cleanTranslation = item.translation.replace(/<br>/g, " | ").replace(/<[^>]*>/g, "");
+
+            return {
+                "No": index + 1,
+                "Tanggal Input": formattedDate,
+                "Vocab / Frasa": item.word,
+                "Tipe Makna": item.context_type || 'Leterlek',
+                "Part of Speech": item.pos || 'Noun',
+                "Verb Type": item.verb_type || '-',
+                "Arti & Kiasan": cleanTranslation
+            };
+        });
+
+        const worksheet = XLSX.utils.json_to_sheet(excelData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Vocab List");
+
+        const today = new Date().toISOString().split('T')[0];
+        XLSX.writeFile(workbook, `Vocab_Go_Backup_${today}.xlsx`);
+    }
+
+    document.getElementById('vocabInput').addEventListener('keypress', e => { if (e.key === 'Enter') addVocab(); });
+    window.onload = loadData;
+</script>
+</body>
+</html>

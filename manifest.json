@@ -1,0 +1,15 @@
+{
+  "name": "Personal Vocab Tracker",
+  "short_name": "VocabApp",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme-color": "#4a90e2",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
