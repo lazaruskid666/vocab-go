@@ -16,7 +16,7 @@
     <script>
         const SUPABASE_URL = "https://qgllqfpwouolvgciuyyx.supabase.co";
         const SUPABASE_KEY = "sb_publishable_sLCh-4Vor" + "FEuNFhkG64RFw_2EStSjqF";
-        const _gk = "AQ.Ab8RN6K7zqr6kgCsq" + "X09S1bWuqmhGyvXnvu3eePKPxEdKEof2Q";
+        const _gk = "AQ.Ab8RN6LdS10XJUN0JmCkY9ALLFZOS2T3L-" + "V6CIVTYPzcXQz1aw";
     </script>
 
     <style>
@@ -114,42 +114,46 @@
 
     async function analyzeWithGemini(text) {
         const cleanText = text.trim();
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${_gk}`;
-        
-        const prompt = `Analisis kata/frasa bahasa Inggris berikut: "${cleanText}". 
-        Berikan respons murni dalam format JSON object tanpa teks tambahan, dengan kunci: 
-        - "translation": arti utama/terjemahan baku dalam bahasa Indonesia, 
-        - "pos": (Noun/Verb/Adjective/Adverb/Pronoun/Preposition/Conjunction/Interjection/Phrase), 
-        - "verb_type": (V1/V2/V3/V-ing/Auxiliary/V1 (Modal) atau "-" jika bukan kata kerja), 
-        - "context_type": (Leterlek / Idiom / Frasa / Slang / Peribahasa), 
-        - "figurative_meaning": penjelasan makna kiasan atau slang mendalam dalam bahasa Indonesia, atau "-" jika tidak ada.`;
+        const url = `https://aiplatform.googleapis.com/v1beta/projects/1008715804203/locations/global/publishers/google/models/gemini-1.5-flash:generateContent`;
+    
+    const prompt = `Analisis kata/frasa bahasa Inggris berikut: "${cleanText}". 
+    Berikan respons murni dalam format JSON object tanpa teks tambahan, dengan kunci: 
+    - "translation": arti utama/terjemahan baku dalam bahasa Indonesia, 
+    - "pos": (Noun/Verb/Adjective/Adverb/Pronoun/Preposition/Conjunction/Interjection/Phrase), 
+    - "verb_type": (V1/V2/V3/V-ing/Auxiliary/V1 (Modal) atau "-" jika bukan kata kerja), 
+    - "context_type": (Leterlek / Idiom / Frasa / Slang / Peribahasa), 
+    - "figurative_meaning": penjelasan makna kiasan atau slang mendalam dalam bahasa Indonesia, atau "-" jika tidak ada.`;
 
-        try {
-            const response = await fetch(url, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { responseMimeType: "application/json" }
-                })
-            });
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: { 
+                "Content-Type": "application/json",
+                // Menggunakan header Authorization Bearer khusus untuk key AQ...
+                "Authorization": `Bearer ${_gk}`
+            },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { responseMimeType: "application/json" }
+            })
+        });
 
-            if (!response.ok) throw new Error("Gagal terhubung ke Google AI Studio");
+        if (!response.ok) throw new Error("Gagal terhubung ke Google AI");
 
-            const data = await response.json();
-            const jsonString = data.candidates[0].content.parts[0].text;
-            return JSON.parse(jsonString);
-        } catch (error) {
-            console.error("Gemini Error:", error);
-            return {
-                translation: "Gagal memproses AI",
-                pos: "Noun",
-                verb_type: "-",
-                context_type: "Leterlek",
-                figurative_meaning: "-"
-            };
-        }
+        const data = await response.json();
+        const jsonString = data.candidates[0].content.parts[0].text;
+        return JSON.parse(jsonString);
+    } catch (error) {
+        console.error("Gemini Error:", error);
+        return {
+            translation: "Gagal memproses AI",
+            pos: "Noun",
+            verb_type: "-",
+            context_type: "Leterlek",
+            figurative_meaning: "-"
+        };
     }
+}
 
     async function loadData() {
         const { data, error } = await db.from('vocabs').select('*').order('created_at', { ascending: true });
