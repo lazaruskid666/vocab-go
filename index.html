@@ -111,11 +111,10 @@
 <script>
     const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     let vocabList = [];
-
     async function analyzeWithGemini(text) {
     const cleanText = text.trim();
-    // Menggunakan endpoint publik standar AI Studio
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${_gk}`;
+    // Endpoint Vertex AI resmi untuk kunci model baru (AQ...)
+    const url = `https://aiplatform.googleapis.com/v1beta/projects/1008715804203/locations/global/publishers/google/models/gemini-1.5-flash:generateContent`;
     
     const prompt = `Analisis kata/frasa bahasa Inggris berikut: "${cleanText}". 
     Berikan respons murni dalam format JSON object tanpa teks tambahan, dengan kunci: 
@@ -128,14 +127,18 @@
     try {
         const response = await fetch(url, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+                "Content-Type": "application/json",
+                // Menggunakan Bearer token karena kuncinya berformat AQ...
+                "Authorization": `Bearer ${_gk}`
+            },
             body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
                 generationConfig: { responseMimeType: "application/json" }
             })
         });
 
-        if (!response.ok) throw new Error("Gagal terhubung ke Google AI");
+        if (!response.ok) throw new Error("Gagal terhubung ke Vertex AI");
 
         const data = await response.json();
         const jsonString = data.candidates[0].content.parts[0].text;
@@ -151,7 +154,6 @@
         };
     }
 }
-
     async function loadData() {
         const { data, error } = await db.from('vocabs').select('*').order('created_at', { ascending: true });
         if (!error) { 
