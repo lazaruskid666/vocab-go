@@ -12,11 +12,10 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
-    <!-- Konfigurasi API Langsung (Tanpa config.js eksternal) -->
+    <!-- Konfigurasi Tanpa API Key Eksternal (Menggunakan Free Dictionary API) -->
     <script>
         const SUPABASE_URL = "https://qgllqfpwouolvgciuyyx.supabase.co";
         const SUPABASE_KEY = "sb_publishable_sLCh-4Vor" + "FEuNFhkG64RFw_2EStSjqF";
-        const _gk = "AQ.Ab8RN6LdS10XJUN0JmCkY9ALLFZOS2T3L-" + "V6CIVTYPzcXQz1aw";
     </script>
 
     <style>
@@ -76,7 +75,7 @@
     <h2>📓 Vocab Go! by Joe</h2>
     
     <div class="form-group" id="inputForm">
-        <input type="text" id="vocabInput" placeholder="Ketik kata, idiom, slang, atau peribahasa..." autofocus>
+        <input type="text" id="vocabInput" placeholder="Ketik kata bahasa Inggris..." autofocus>
         <button onclick="addVocab()">Tambah</button>
     </div>
 
@@ -111,49 +110,59 @@
 <script>
     const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     let vocabList = [];
+
     async function analyzeWithGemini(text) {
-    const cleanText = text.trim();
-    // Endpoint Vertex AI resmi untuk kunci model baru (AQ...)
-    const url = `https://aiplatform.googleapis.com/v1beta/projects/1008715804203/locations/global/publishers/google/models/gemini-1.5-flash:generateContent`;
-    
-    const prompt = `Analisis kata/frasa bahasa Inggris berikut: "${cleanText}". 
-    Berikan respons murni dalam format JSON object tanpa teks tambahan, dengan kunci: 
-    - "translation": arti utama/terjemahan baku dalam bahasa Indonesia, 
-    - "pos": (Noun/Verb/Adjective/Adverb/Pronoun/Preposition/Conjunction/Interjection/Phrase), 
-    - "verb_type": (V1/V2/V3/V-ing/Auxiliary/V1 (Modal) atau "-" jika bukan kata kerja), 
-    - "context_type": (Leterlek / Idiom / Frasa / Slang / Peribahasa), 
-    - "figurative_meaning": penjelasan makna kiasan atau slang mendalam dalam bahasa Indonesia, atau "-" jika tidak ada.`;
+        const cleanText = text.trim().toLowerCase();
+        
+        try {
+            const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(cleanText)}`);
+            
+            if (!response.ok) {
+                throw new Error("Kata tidak ditemukan di kamus");
+            }
 
-    try {
-        const response = await fetch(url, {
-            method: "POST",
-            headers: { 
-                "Content-Type": "application/json",
-                // Menggunakan Bearer token karena kuncinya berformat AQ...
-                "Authorization": `Bearer ${_gk}`
-            },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { responseMimeType: "application/json" }
-            })
-        });
+            const data = await response.json();
+            const entry = data[0];
+            
+            let pos = "Noun";
+            let definition = "";
+            
+            if (entry.meanings && entry.meanings.length > 0) {
+                pos = entry.meanings[0].partOfSpeech || "Noun";
+                pos = pos.charAt(0).toUpperCase() + pos.slice(1);
+                
+                if (entry.meanings[0].definitions && entry.meanings[0].definitions.length > 0) {
+                    definition = entry.meanings[0].definitions[0].definition;
+                }
+            }
 
-        if (!response.ok) throw new Error("Gagal terhubung ke Vertex AI");
+            let verbType = "-";
+            if (pos.toLowerCase() === "verb") {
+                if (cleanText.endsWith("ing")) verbType = "V-ing";
+                else if (cleanText.endsWith("ed")) verbType = "V2/V3";
+                else verbType = "V1";
+            }
 
-        const data = await response.json();
-        const jsonString = data.candidates[0].content.parts[0].text;
-        return JSON.parse(jsonString);
-    } catch (error) {
-        console.error("Gemini Error:", error);
-        return {
-            translation: "Gagal memproses AI",
-            pos: "Noun",
-            verb_type: "-",
-            context_type: "Leterlek",
-            figurative_meaning: "-"
-        };
+            return {
+                translation: definition ? `${definition}` : cleanText,
+                pos: pos,
+                verb_type: verbType,
+                context_type: cleanText.includes(" ") ? "Frasa" : "Leterlek",
+                figurative_meaning: "-"
+            };
+
+        } catch (error) {
+            console.warn("Menggunakan fallback lokal:", error);
+            return {
+                translation: text,
+                pos: "Noun",
+                verb_type: "-",
+                context_type: text.includes(" ") ? "Frasa" : "Leterlek",
+                figurative_meaning: "-"
+            };
+        }
     }
-}
+
     async function loadData() {
         const { data, error } = await db.from('vocabs').select('*').order('created_at', { ascending: true });
         if (!error) { 
