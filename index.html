@@ -113,8 +113,9 @@
     let vocabList = [];
 
     async function analyzeWithGemini(text) {
-        const cleanText = text.trim();
-        const url = `https://aiplatform.googleapis.com/v1beta/projects/1008715804203/locations/global/publishers/google/models/gemini-1.5-flash:generateContent`;
+    const cleanText = text.trim();
+    // Menggunakan endpoint publik standar AI Studio
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${_gk}`;
     
     const prompt = `Analisis kata/frasa bahasa Inggris berikut: "${cleanText}". 
     Berikan respons murni dalam format JSON object tanpa teks tambahan, dengan kunci: 
@@ -127,11 +128,7 @@
     try {
         const response = await fetch(url, {
             method: "POST",
-            headers: { 
-                "Content-Type": "application/json",
-                // Menggunakan header Authorization Bearer khusus untuk key AQ...
-                "Authorization": `Bearer ${_gk}`
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
                 generationConfig: { responseMimeType: "application/json" }
