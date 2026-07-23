@@ -7,13 +7,15 @@ export default async function handler(request, context) {
         const body = await request.json();
         const word = body.word.trim();
         
-        // Mengambil API Key (Token AQ...) dari Environment Variables Netlify
+        // Mengambil API Key dari Netlify Env
         const apiKey = Netlify.env.get("GEMINI_API_KEY"); 
         
-        // Endpoint Vertex AI
+        if (!apiKey) {
+            throw new Error("API Key tidak ditemukan di server Netlify.");
+        }
+
         const url = `https://aiplatform.googleapis.com/v1beta/projects/1008715804203/locations/global/publishers/google/models/gemini-1.5-flash:generateContent`;
 
-        // Prompt presisi dengan standar buku referensi
         const prompt = `Analisis kata/frasa bahasa Inggris berikut: "${word}". 
         Berpatokan teguh pada aturan 8 Parts of Speech dan tata bahasa dari buku "Otodidak Jago Kuasai Bahasa Inggris dari Nol".
         Berikan respons murni dalam format JSON object tanpa teks awalan/akhiran, dengan kunci: 
@@ -37,7 +39,7 @@ export default async function handler(request, context) {
 
         if (!response.ok) {
             const err = await response.text();
-            throw new Error(`Vertex AI Error: ${err}`);
+            throw new Error(`Google AI Error: ${response.status} - ${err}`);
         }
 
         const data = await response.json();
@@ -49,6 +51,7 @@ export default async function handler(request, context) {
         });
 
     } catch (error) {
+        // Ini akan mengirim detail error ke frontend agar bisa dibaca di F12
         return new Response(JSON.stringify({ error: error.message }), {
             status: 500,
             headers: { "Content-Type": "application/json" }
